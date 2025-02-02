@@ -10,7 +10,7 @@ app = Flask(__name__)
 # Initialize pygame mixer
 pygame.mixer.init()
 # Load sound
-sound = pygame.mixer.Sound(r"C:\Users\taher farh\Downloads\fitnees_app\get api model\692525__newlocknew__vehsirn_police-car-sirensynthesizeddry-2_em.wav")
+sound = pygame.mixer.Sound(r"C:\Users\taher farh\Downloads\fitnees_app\get api model\سااااررينا\سااااررينا\siren-alert-96052.mp3")
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
@@ -248,14 +248,120 @@ def hummer():
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
+def dumbbell_front_raise():
+    left_counter = 0
+    right_counter = 0
+    left_state = "down"
+    right_state = "down"
+    cap = cv2.VideoCapture(0)
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Flip the frame horizontally
+        frame = cv2.flip(frame, 1)
+        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = pose.process(image)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+        if results.pose_landmarks:
+            landmarks = results.pose_landmarks.landmark
+
+            arm_sides = {
+                'left': {
+                    'shoulder': mp_pose.PoseLandmark.LEFT_SHOULDER,
+                    'elbow': mp_pose.PoseLandmark.LEFT_ELBOW,
+                    'wrist': mp_pose.PoseLandmark.LEFT_WRIST,
+                    'hip': mp_pose.PoseLandmark.LEFT_HIP
+                },
+                'right': {
+                    'shoulder': mp_pose.PoseLandmark.RIGHT_SHOULDER,
+                    'elbow': mp_pose.PoseLandmark.RIGHT_ELBOW,
+                    'wrist': mp_pose.PoseLandmark.RIGHT_WRIST,
+                    'hip': mp_pose.PoseLandmark.RIGHT_HIP
+                }
+            }
+
+            for side, joints in arm_sides.items():
+                shoulder = landmarks[joints['shoulder'].value]
+                elbow = landmarks[joints['elbow'].value]
+                wrist = landmarks[joints['wrist'].value]
+                hip = landmarks[joints['hip'].value]
+
+                # Get coordinates
+                shoulder_coords = (int(shoulder.x * image.shape[1]), int(shoulder.y * image.shape[0]))
+                elbow_coords = (int(elbow.x * image.shape[1]), int(elbow.y * image.shape[0]))
+                wrist_coords = (int(wrist.x * image.shape[1]), int(wrist.y * image.shape[0]))
+                hip_coords = (int(hip.x * image.shape[1]), int(hip.y * image.shape[0]))
+
+                # Draw lines and points
+                cv2.line(image, shoulder_coords, elbow_coords, (0, 255, 0), 2)
+                cv2.line(image, elbow_coords, wrist_coords, (0, 255, 0), 2)
+                cv2.line(image, hip_coords, shoulder_coords, (0, 255, 0), 2)
+
+                for point in [shoulder_coords, elbow_coords, wrist_coords, hip_coords]:
+                    cv2.circle(image, point, 7, (0, 0, 255), -1)
+
+                # Calculate angles
+                elbow_angle = calculate_angle([shoulder.x, shoulder.y], [elbow.x, elbow.y], [wrist.x, wrist.y])
+                shoulder_angle = calculate_angle([hip.x, hip.y], [shoulder.x, shoulder.y], [elbow.x, elbow.y])
+
+                # Display angles
+                cv2.putText(image, f'{int(elbow_angle)}', elbow_coords, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                cv2.putText(image, f'{int(shoulder_angle)}', shoulder_coords, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
+                # Check for correct form and count reps
+                wrist_x = wrist.x * image.shape[1]
+                shoulder_x = shoulder.x * image.shape[1]
+                wrist_y = wrist.y * image.shape[0]
+                shoulder_y = shoulder.y * image.shape[0]
+
+                if side == 'left':
+                    if wrist.y < shoulder.y and elbow_angle > 160 and left_state == "down":
+                        # التأكد من أن اليد تكون للأمام وليس للجنب
+                        if 30 < abs(wrist_x - shoulder_x) < 100:  # المسافة الأفقية بين المعصم والكتف
+                            left_state = "up"
+                            left_counter += 1
+                    elif wrist.y > shoulder.y and elbow_angle > 160 and left_state == "up":
+                        left_state = "down"
+                elif side == 'right':
+                    if wrist.y < shoulder.y and elbow_angle > 160 and right_state == "down":
+                        # التأكد من أن اليد تكون للأمام وليس للجنب
+                        if 30 < abs(wrist_x - shoulder_x) < 100:  # المسافة الأفقية بين المعصم والكتف
+                            right_state = "up"
+                            right_counter += 1
+                    elif wrist.y > shoulder.y and elbow_angle > 160 and right_state == "up":
+                        right_state = "down"
+
+            # Display counters
+            cv2.putText(image, f'Left Counter: {left_counter}', (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+            cv2.putText(image, f'Right Counter: {right_counter}', (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+
+
+        
+        cv2.waitKey(1)  
+        ret, buffer = cv2.imencode('.jpg', image)
+        frame = buffer.tobytes()
+
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+
+
 @app.route('/video_feed/<exercise>')
 def video_feed(exercise):
-    # You can log the exercise type if needed
-    print(f"Starting video feed for: {exercise}")
-    return Response(hummer(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    if exercise == 'hummer':
+        return Response(hummer(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    elif exercise == 'front_raise':
+        return Response(dumbbell_front_raise(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    else:
+        return "Invalid exercise", 400
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
